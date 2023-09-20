@@ -54,7 +54,7 @@ class RangerROSMessenger {
 
   void Run();
 
- private:
+ protected:
   void LoadParameters();
   void SetupSubscription();
   void PublishStateToROS();
