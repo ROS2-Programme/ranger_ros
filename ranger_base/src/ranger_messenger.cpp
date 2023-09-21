@@ -462,7 +462,7 @@ double RangerROSMessenger::CalculateSteeringAngle(geometry_msgs::Twist msg,
   l = robot_params_.wheelbase;
   w = robot_params_.track;
   x = sqrt(radius * radius + (l / 2) * (l / 2));
-  phi_i = atan((l / 2) / (x - w / 2));
+  phi_i = atan2((l / 2) , (x - w / 2));
   return k * phi_i;
 }
 
@@ -470,7 +470,7 @@ double RangerROSMessenger::ConvertInnerAngleToCentral(double angle) {
   double phi = 0;
   double phi_i = std::abs(angle);
 
-  phi = std::atan(robot_params_.wheelbase * std::sin(phi_i) /
+  phi = std::atan2(robot_params_.wheelbase * std::sin(phi_i) ,
                   (robot_params_.wheelbase * std::cos(phi_i) +
                    robot_params_.track * std::sin(phi_i)));
 
@@ -482,7 +482,7 @@ double RangerROSMessenger::ConvertCentralAngleToInner(double angle) {
   double phi = std::abs(angle);
   double phi_i = 0;
 
-  phi_i = std::atan(robot_params_.wheelbase * std::sin(phi) /
+  phi_i = std::atan2(robot_params_.wheelbase * std::sin(phi) ,
                     (robot_params_.wheelbase * std::cos(phi) -
                      robot_params_.track * std::sin(phi)));
   phi_i *= angle >= 0 ? 1.0 : -1.0;

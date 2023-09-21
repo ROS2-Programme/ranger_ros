@@ -114,7 +114,7 @@ include_directories(${EIGEN3_INCLUDE_DIR})
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
   INCLUDE_DIRS include
-#  LIBRARIES ranger_base
+  LIBRARIES ranger_messenger
 #  CATKIN_DEPENDS controller_manager geometry_msgs ranger_msgs roscpp roslaunch sensor_msgs topic_tools ugv_sdk
 #  DEPENDS system_lib
 )
@@ -136,7 +136,7 @@ target_include_directories(ascent INTERFACE
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 	$<INSTALL_INTERFACE:include>)
 
-add_library(ranger_messenger STATIC src/ranger_messenger.cpp)
+add_library(ranger_messenger src/ranger_messenger.cpp)
 target_link_libraries(ranger_messenger ${catkin_LIBRARIES} ascent)
 add_dependencies(ranger_messenger ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
