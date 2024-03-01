@@ -98,8 +98,8 @@ void RangerROSMessenger::LoadParameters() {
     robot_params_.max_linear_speed = RangerMiniV1Params::max_linear_speed;
     robot_params_.max_angular_speed = RangerMiniV1Params::max_angular_speed;
     robot_params_.max_speed_cmd = RangerMiniV1Params::max_speed_cmd;
-    robot_params_.max_steer_angle_central =
-        RangerMiniV1Params::max_steer_angle_central;
+    robot_params_.max_steer_angle_ackermann =
+        RangerMiniV1Params::max_steer_angle_ackermann;
     robot_params_.max_steer_angle_parallel =
         RangerMiniV1Params::max_steer_angle_parallel;
     robot_params_.max_round_angle = RangerMiniV1Params::max_round_angle;
@@ -114,8 +114,8 @@ void RangerROSMessenger::LoadParameters() {
       robot_params_.max_linear_speed = RangerMiniV2Params::max_linear_speed;
       robot_params_.max_angular_speed = RangerMiniV2Params::max_angular_speed;
       robot_params_.max_speed_cmd = RangerMiniV2Params::max_speed_cmd;
-      robot_params_.max_steer_angle_central =
-          RangerMiniV2Params::max_steer_angle_central;
+      robot_params_.max_steer_angle_ackermann =
+          RangerMiniV2Params::max_steer_angle_ackermann;
       robot_params_.max_steer_angle_parallel =
           RangerMiniV2Params::max_steer_angle_parallel;
       robot_params_.max_round_angle = RangerMiniV2Params::max_round_angle;
@@ -129,8 +129,8 @@ void RangerROSMessenger::LoadParameters() {
       robot_params_.max_linear_speed = RangerParams::max_linear_speed;
       robot_params_.max_angular_speed = RangerParams::max_angular_speed;
       robot_params_.max_speed_cmd = RangerParams::max_speed_cmd;
-      robot_params_.max_steer_angle_central =
-          RangerParams::max_steer_angle_central;
+      robot_params_.max_steer_angle_ackermann =
+          RangerParams::max_steer_angle_ackermann;
       robot_params_.max_steer_angle_parallel =
           RangerParams::max_steer_angle_parallel;
       robot_params_.max_round_angle = RangerParams::max_round_angle;
@@ -138,6 +138,7 @@ void RangerROSMessenger::LoadParameters() {
       robot_params_.parking_mode = RangerParams::parking_mode;
     }
   }
+  parking_mode_ = false;
 }
 
 void RangerROSMessenger::SetupSubscription() {
@@ -150,17 +151,18 @@ void RangerROSMessenger::SetupSubscription() {
       nh_->advertise<ranger_msgs::ActuatorStateArray>("/actuator_state", 10);
   odom_pub_ = nh_->advertise<nav_msgs::Odometry>(odom_topic_name_, 10);
   battery_state_pub_ =
-      nh_->advertise<sensor_msgs::BatteryState>("/battery_state", 10);
+      nh_->advertise<ranger_msgs::BatteryState>("/battery_state", 10);
 
   // subscriber
   motion_cmd_sub_ = nh_->subscribe<geometry_msgs::Twist>(
       "/cmd_vel", 5, &RangerROSMessenger::TwistCmdCallback, this);
+  light_cmd_subscriber_ = nh_->subscribe<ranger_msgs::RangerLightCmd>(
+      "/ranger_light_control", 5, &RangerROSMessenger::LightCmdCallback, this);
+
 
   // service server
-  trigger_parking_server = nh_->advertiseService("parking_service", &RangerROSMessenger::TriggerParkingService, this);
-
-  // service client
-  trigger_parking_client = nh_->serviceClient<ranger_msgs::TriggerParkMode>("parking_service");
+  trigger_parking_server = nh_->advertiseService(
+      "parking_service", &RangerROSMessenger::TriggerParkingService, this);
 }
 
 void RangerROSMessenger::PublishStateToROS() {
@@ -236,9 +238,12 @@ void RangerROSMessenger::PublishStateToROS() {
           actuator_state.actuator_ls_state->driver_state;
 
       ranger_msgs::MotorState motor_state_msg;
-      motor_state_msg.rpm = actuator_state.actuator_hs_state[i].rpm;
-      motor_state_msg.current = actuator_state.actuator_hs_state[i].current;
-      motor_state_msg.pulse_count = actuator_state.actuator_hs_state[i].pulse_count;
+      motor_state_msg.rpm =
+          actuator_state.actuator_hs_state->rpm;
+      motor_state_msg.current =
+          actuator_state.actuator_hs_state->current;
+      motor_state_msg.pulse_count =
+          actuator_state.actuator_hs_state->pulse_count;
 
       ranger_msgs::ActuatorState actuator_state_msg;
       actuator_state_msg.id = i;
@@ -255,7 +260,7 @@ void RangerROSMessenger::PublishStateToROS() {
   {
     // auto common_sensor_state = robot_->GetCommonSensorState();
 
-    sensor_msgs::BatteryState batt_msg;
+    ranger_msgs::BatteryState batt_msg;
     batt_msg.header.stamp = current_time_;
     batt_msg.voltage = state.bms_basic_state.voltage;
     batt_msg.temperature = state.bms_basic_state.temperature;
@@ -265,11 +270,11 @@ void RangerROSMessenger::PublishStateToROS() {
     batt_msg.capacity = std::numeric_limits<float>::quiet_NaN();
     batt_msg.design_capacity = std::numeric_limits<float>::quiet_NaN();
     batt_msg.power_supply_status =
-        sensor_msgs::BatteryState::POWER_SUPPLY_STATUS_UNKNOWN;
+        ranger_msgs::BatteryState::POWER_SUPPLY_STATUS_UNKNOWN;
     batt_msg.power_supply_health =
-        sensor_msgs::BatteryState::POWER_SUPPLY_HEALTH_UNKNOWN;
+        ranger_msgs::BatteryState::POWER_SUPPLY_HEALTH_UNKNOWN;
     batt_msg.power_supply_technology =
-        sensor_msgs::BatteryState::POWER_SUPPLY_TECHNOLOGY_LION;
+        ranger_msgs::BatteryState::POWER_SUPPLY_TECHNOLOGY_LION;
     batt_msg.present = std::numeric_limits<uint8_t>::quiet_NaN();
 
     battery_state_pub_.publish(batt_msg);
@@ -277,17 +282,18 @@ void RangerROSMessenger::PublishStateToROS() {
 }
 
 void RangerROSMessenger::UpdateOdometry(double linear, double angular,
-                                        double angle, double dt) {
+                                        double steering_angle, double dt) {
   // update odometry calculations
   if (motion_mode_ == MotionState::MOTION_MODE_DUAL_ACKERMAN) {
     DualAckermanModel::state_type x = {position_x_, position_y_, theta_};
     DualAckermanModel::control_type u;
     u.v = linear;
-    u.phi = ConvertInnerAngleToCentral(angle);
+    u.phi = steering_angle;
 
     boost::numeric::odeint::integrate_const(
         boost::numeric::odeint::runge_kutta4<DualAckermanModel::state_type>(),
-        DualAckermanModel(robot_params_.wheelbase, u), x, 0.0, dt, (dt / 10.0));
+        DualAckermanModel(robot_params_.wheelbase, robot_params_.track, u), x,
+        0.0, dt, (dt / 10.0));
 
     position_x_ = x[0];
     position_y_ = x[1];
@@ -300,7 +306,7 @@ void RangerROSMessenger::UpdateOdometry(double linear, double angular,
     if (motion_mode_ == MotionState::MOTION_MODE_SIDE_SLIP) {
       u.phi = M_PI / 2.0;
     } else {
-      u.phi = angle;
+      u.phi = steering_angle;
     }
     boost::numeric::odeint::integrate_const(
         boost::numeric::odeint::runge_kutta4<ParallelModel::state_type>(),
@@ -341,20 +347,25 @@ void RangerROSMessenger::UpdateOdometry(double linear, double angular,
   odom_msg.pose.pose.orientation = odom_quat;
 
   if (motion_mode_ == MotionState::MOTION_MODE_DUAL_ACKERMAN) {
-    odom_msg.twist.twist.linear.x = linear * std::cos(theta_);
-    odom_msg.twist.twist.linear.y = linear * std::sin(theta_);
-    odom_msg.twist.twist.angular.z =
-        2 * linear * std::sin(ConvertInnerAngleToCentral(angle)) /
-        robot_params_.wheelbase;
+    odom_msg.twist.twist.linear.x = linear;
+    odom_msg.twist.twist.linear.y = 0.0;
+    if (steering_angle == 0) {
+      odom_msg.twist.twist.angular.z = 0;
+    } else {
+      odom_msg.twist.twist.angular.z =
+          (steering_angle / std::abs(steering_angle)) * 2 * linear /
+          (robot_params_.wheelbase / std::abs(std::tan(steering_angle)) +
+           robot_params_.track);
+    }
   } else if (motion_mode_ == MotionState::MOTION_MODE_PARALLEL ||
              motion_mode_ == MotionState::MOTION_MODE_SIDE_SLIP) {
-    double phi = angle;
+    double phi = steering_angle;
 
     if (motion_mode_ == MotionState::MOTION_MODE_SIDE_SLIP) {
       phi = M_PI / 2.0;
     }
-    odom_msg.twist.twist.linear.x = linear * std::cos(phi + theta_);
-    odom_msg.twist.twist.linear.y = linear * std::sin(phi + theta_);
+    odom_msg.twist.twist.linear.x = linear * std::cos(phi);
+    odom_msg.twist.twist.linear.y = linear * std::sin(phi);
 
     odom_msg.twist.twist.angular.z = 0;
   } else if (motion_mode_ == MotionState::MOTION_MODE_SPINNING) {
@@ -388,10 +399,9 @@ void RangerROSMessenger::TwistCmdCallback(
 
   // analyze Twist msg and switch motion_mode
   // check for parking mode, only applicable to RangerMiniV2
-  if (robot_params_.parking_mode && robot_type_ == RangerSubType::kRangerMiniV2) {
+  if (parking_mode_ && robot_type_ == RangerSubType::kRangerMiniV2) {
     return;
-  }
-  else if (msg->linear.y != 0) {
+  } else if (msg->linear.y != 0) {
     if (msg->linear.x == 0.0 && robot_type_ == RangerSubType::kRangerMiniV1) {
       motion_mode_ = MotionState::MOTION_MODE_SIDE_SLIP;
       robot_->SetMotionMode(MotionState::MOTION_MODE_SIDE_SLIP);
@@ -414,14 +424,13 @@ void RangerROSMessenger::TwistCmdCallback(
   // send motion command to robot
   switch (motion_mode_) {
     case MotionState::MOTION_MODE_DUAL_ACKERMAN: {
-      if (steer_cmd > robot_params_.max_steer_angle_central) {
-        steer_cmd = robot_params_.max_steer_angle_central;
+      if (steer_cmd > robot_params_.max_steer_angle_ackermann) {
+        steer_cmd = robot_params_.max_steer_angle_ackermann;
       }
-      if (steer_cmd < -robot_params_.max_steer_angle_central) {
-        steer_cmd = -robot_params_.max_steer_angle_central;
+      if (steer_cmd < -robot_params_.max_steer_angle_ackermann) {
+        steer_cmd = -robot_params_.max_steer_angle_ackermann;
       }
-      double phi_i = ConvertCentralAngleToInner(steer_cmd);
-      robot_->SetMotionCommand(msg->linear.x, phi_i);
+      robot_->SetMotionCommand(msg->linear.x, steer_cmd);
       break;
     }
     case MotionState::MOTION_MODE_PARALLEL: {
@@ -463,6 +472,34 @@ void RangerROSMessenger::TwistCmdCallback(
   }
 }
 
+void RangerROSMessenger::LightCmdCallback(
+    const ranger_msgs::RangerLightCmd::ConstPtr &msg)
+{
+    if (msg->enable_cmd_light_control)
+    {
+      LightCommandMessage cmd;
+
+      switch (msg->front_mode)
+      {
+        case ranger_msgs::RangerLightCmd::LIGHT_CONST_OFF:
+        {
+          cmd.front_light.mode = CONST_OFF;
+          break;
+        }
+        case ranger_msgs::RangerLightCmd::LIGHT_CONST_ON:
+        {
+          cmd.front_light.mode = CONST_ON;
+          break;
+        }
+      }
+      robot_->SetLightCommand(cmd.front_light.mode,0,cmd.front_light.mode,0);
+    }
+    else
+    {
+      robot_->DisableLightControl();
+    }
+}
+
 double RangerROSMessenger::CalculateSteeringAngle(geometry_msgs::Twist msg,
                                                   double& radius) {
   double linear = std::abs(msg.linear.x);
@@ -472,9 +509,10 @@ double RangerROSMessenger::CalculateSteeringAngle(geometry_msgs::Twist msg,
   radius = linear / angular;
   int k = (msg.angular.z * msg.linear.x) >= 0 ? 1.0 : -1.0;
 
-  double l, w, phi_i, x;
+  double l, w, phi_i;
   l = robot_params_.wheelbase;
   w = robot_params_.track;
+<<<<<<< HEAD
   x = sqrt(radius * radius + (l / 2) * (l / 2));
   phi_i = atan2((l / 2) , (x - w / 2));
   return k * phi_i;
@@ -501,6 +539,32 @@ double RangerROSMessenger::ConvertCentralAngleToInner(double angle) {
                      robot_params_.track * std::sin(phi)));
   phi_i *= angle >= 0 ? 1.0 : -1.0;
   return phi_i;
+=======
+  phi_i = atan((l / 2) / (radius - w / 2));
+  ROS_INFO("command linear: %f, angular: %f", linear, phi_i);
+  return k * phi_i;
+}
+
+bool RangerROSMessenger::TriggerParkingService(
+    ranger_msgs::TriggerParkMode::Request& req,
+    ranger_msgs::TriggerParkMode::Response& res) {
+  // Call to trigger park mode
+  if (req.TriggerParkedMode) {
+    res.isParked = true;
+    robot_->SetMotionCommand(0.0,
+                             0.0);  // This functions needs to be invoked before
+                                    // the parking mode can be triggered
+    robot_->SetMotionMode(MotionState::MOTION_MODE_PARKING);
+  } else {  // Call to release park mode
+    res.isParked = false;
+    robot_->SetMotionMode(MotionState::MOTION_MODE_DUAL_ACKERMAN);
+    robot_->SetMotionCommand(
+        0.0, 0.0);  // Setting the mode to dual Ackerman doesn't return the
+                    // wheels to its original position, hence this function.
+  }
+  parking_mode_ = res.isParked;
+  return true;
+>>>>>>> main
 }
 
 bool RangerROSMessenger::TriggerParkingService(ranger_msgs::TriggerParkMode::Request &req, 

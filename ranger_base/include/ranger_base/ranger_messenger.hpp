@@ -22,12 +22,13 @@
 
 #include <geometry_msgs/Twist.h>
 #include <nav_msgs/Odometry.h>
-#include <sensor_msgs/BatteryState.h>
 
 #include <ranger_msgs/SystemState.h>
 #include <ranger_msgs/MotionState.h>
 #include <ranger_msgs/ActuatorStateArray.h>
+#include <ranger_msgs/RangerLightCmd.h>
 #include <ranger_msgs/TriggerParkMode.h>
+#include <ranger_msgs/BatteryState.h>
 
 #include "ranger_base/ranger_params.hpp"
 #include "ugv_sdk/mobile_robot/ranger_robot.hpp"
@@ -42,7 +43,7 @@ class RangerROSMessenger {
     double max_linear_speed;
     double max_angular_speed;
     double max_speed_cmd;
-    double max_steer_angle_central;
+    double max_steer_angle_ackermann;
     double max_steer_angle_parallel;
     double max_round_angle;
     double min_turn_radius;
@@ -62,6 +63,7 @@ class RangerROSMessenger {
   void PublishStateToROS();
   void PublishSimStateToROS(double linear, double angular);
   void TwistCmdCallback(const geometry_msgs::Twist::ConstPtr& msg);
+  void LightCmdCallback(const ranger_msgs::RangerLightCmd::ConstPtr &msg);
   double CalculateSteeringAngle(geometry_msgs::Twist msg, double& radius);
   void UpdateOdometry(double linear, double angular, double angle, double dt);
   double ConvertInnerAngleToCentral(double angle);
@@ -86,6 +88,7 @@ class RangerROSMessenger {
   bool publish_odom_tf_;
 
   uint8_t motion_mode_ = 0;
+  bool parking_mode_;
 
   ros::Publisher system_state_pub_;
   ros::Publisher motion_state_pub_;
@@ -94,6 +97,9 @@ class RangerROSMessenger {
   ros::Publisher battery_state_pub_;
 
   ros::Subscriber motion_cmd_sub_;
+  ros::Subscriber light_cmd_subscriber_;
+
+  ros::ServiceServer trigger_parking_server;
 
   ros::ServiceServer trigger_parking_server;
   ros::ServiceClient trigger_parking_client;
