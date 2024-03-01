@@ -1,7 +1,3 @@
 bool TriggerParkedMode
 ---
-<<<<<<< HEAD
-bool response
-=======
->>>>>>> main
 bool isParked

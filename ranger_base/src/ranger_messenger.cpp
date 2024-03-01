@@ -104,7 +104,6 @@ void RangerROSMessenger::LoadParameters() {
         RangerMiniV1Params::max_steer_angle_parallel;
     robot_params_.max_round_angle = RangerMiniV1Params::max_round_angle;
     robot_params_.min_turn_radius = RangerMiniV1Params::min_turn_radius;
-    robot_params_.parking_mode = RangerMiniV1Params::parking_mode;
   } else {
     if (robot_model_ == "ranger_mini_v2") {
       robot_type_ = RangerSubType::kRangerMiniV2;
@@ -120,7 +119,6 @@ void RangerROSMessenger::LoadParameters() {
           RangerMiniV2Params::max_steer_angle_parallel;
       robot_params_.max_round_angle = RangerMiniV2Params::max_round_angle;
       robot_params_.min_turn_radius = RangerMiniV2Params::min_turn_radius;
-      robot_params_.parking_mode = RangerMiniV2Params::parking_mode;
     } else {
       robot_type_ = RangerSubType::kRanger;
 
@@ -135,7 +133,6 @@ void RangerROSMessenger::LoadParameters() {
           RangerParams::max_steer_angle_parallel;
       robot_params_.max_round_angle = RangerParams::max_round_angle;
       robot_params_.min_turn_radius = RangerParams::min_turn_radius;
-      robot_params_.parking_mode = RangerParams::parking_mode;
     }
   }
   parking_mode_ = false;
@@ -258,14 +255,14 @@ void RangerROSMessenger::PublishStateToROS() {
 
   // publish BMS state
   {
-    // auto common_sensor_state = robot_->GetCommonSensorState();
+    auto common_sensor_state = robot_->GetCommonSensorState();
 
     ranger_msgs::BatteryState batt_msg;
     batt_msg.header.stamp = current_time_;
-    batt_msg.voltage = state.bms_basic_state.voltage;
-    batt_msg.temperature = state.bms_basic_state.temperature;
-    batt_msg.current = state.bms_basic_state.current;
-    batt_msg.percentage = state.bms_basic_state.battery_soc;
+    batt_msg.voltage = common_sensor_state.bms_basic_state.voltage;
+    batt_msg.temperature = common_sensor_state.bms_basic_state.temperature;
+    batt_msg.current = common_sensor_state.bms_basic_state.current;
+    batt_msg.percentage = common_sensor_state.bms_basic_state.battery_soc;
     batt_msg.charge = std::numeric_limits<float>::quiet_NaN();
     batt_msg.capacity = std::numeric_limits<float>::quiet_NaN();
     batt_msg.design_capacity = std::numeric_limits<float>::quiet_NaN();
@@ -512,35 +509,7 @@ double RangerROSMessenger::CalculateSteeringAngle(geometry_msgs::Twist msg,
   double l, w, phi_i;
   l = robot_params_.wheelbase;
   w = robot_params_.track;
-<<<<<<< HEAD
-  x = sqrt(radius * radius + (l / 2) * (l / 2));
-  phi_i = atan2((l / 2) , (x - w / 2));
-  return k * phi_i;
-}
-
-double RangerROSMessenger::ConvertInnerAngleToCentral(double angle) {
-  double phi = 0;
-  double phi_i = std::abs(angle);
-
-  phi = std::atan2(robot_params_.wheelbase * std::sin(phi_i) ,
-                  (robot_params_.wheelbase * std::cos(phi_i) +
-                   robot_params_.track * std::sin(phi_i)));
-
-  phi *= angle >= 0 ? 1.0 : -1.0;
-  return phi;
-}
-
-double RangerROSMessenger::ConvertCentralAngleToInner(double angle) {
-  double phi = std::abs(angle);
-  double phi_i = 0;
-
-  phi_i = std::atan2(robot_params_.wheelbase * std::sin(phi) ,
-                    (robot_params_.wheelbase * std::cos(phi) -
-                     robot_params_.track * std::sin(phi)));
-  phi_i *= angle >= 0 ? 1.0 : -1.0;
-  return phi_i;
-=======
-  phi_i = atan((l / 2) / (radius - w / 2));
+  phi_i = atan2((l / 2) , (radius - w / 2));
   ROS_INFO("command linear: %f, angular: %f", linear, phi_i);
   return k * phi_i;
 }
@@ -564,22 +533,5 @@ bool RangerROSMessenger::TriggerParkingService(
   }
   parking_mode_ = res.isParked;
   return true;
->>>>>>> main
-}
-
-bool RangerROSMessenger::TriggerParkingService(ranger_msgs::TriggerParkMode::Request &req, 
-                                               ranger_msgs::TriggerParkMode::Response &res) {
-  // Call to trigger park mode                                             
-  if (req.TriggerParkedMode) {
-    res.response = true;
-    res.isParked = true;
-    robot_->SetMotionMode(MotionState::MOTION_MODE_PARKING);
-  } else { // Call to release park mode
-    res.response = true;
-    res.isParked = false;
-    robot_->SetMotionMode(MotionState::MOTION_MODE_DUAL_ACKERMAN);
-  }
-  robot_params_.parking_mode = res.isParked;
-  return res.response;
 }
 }  // namespace westonrobot

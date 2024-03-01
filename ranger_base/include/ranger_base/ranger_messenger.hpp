@@ -100,8 +100,6 @@ class RangerROSMessenger {
   ros::Subscriber light_cmd_subscriber_;
 
   ros::ServiceServer trigger_parking_server;
-
-  ros::ServiceServer trigger_parking_server;
   ros::ServiceClient trigger_parking_client;
 
   tf2_ros::TransformBroadcaster tf_broadcaster_;
