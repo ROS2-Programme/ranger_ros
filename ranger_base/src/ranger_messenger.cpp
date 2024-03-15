@@ -226,21 +226,21 @@ void RangerROSMessenger::PublishStateToROS() {
     for (int i = 0; i < 8; i++) {
       ranger_msgs::DriverState driver_state_msg;
       driver_state_msg.driver_voltage =
-          actuator_state.actuator_ls_state->driver_voltage;
+          actuator_state.actuator_ls_state[i].driver_voltage;
       driver_state_msg.driver_temperature =
-          actuator_state.actuator_ls_state->driver_temp;
+          actuator_state.actuator_ls_state[i].driver_temp;
       driver_state_msg.motor_temperature =
-          actuator_state.actuator_ls_state->motor_temp;
+          actuator_state.actuator_ls_state[i].motor_temp;
       driver_state_msg.driver_state =
-          actuator_state.actuator_ls_state->driver_state;
+          actuator_state.actuator_ls_state[i].driver_state;
 
       ranger_msgs::MotorState motor_state_msg;
       motor_state_msg.rpm =
-          actuator_state.actuator_hs_state->rpm;
+          actuator_state.actuator_hs_state[i].rpm;
       motor_state_msg.current =
-          actuator_state.actuator_hs_state->current;
+          actuator_state.actuator_hs_state[i].current;
       motor_state_msg.pulse_count =
-          actuator_state.actuator_hs_state->pulse_count;
+          actuator_state.actuator_hs_state[i].pulse_count;
 
       ranger_msgs::ActuatorState actuator_state_msg;
       actuator_state_msg.id = i;
